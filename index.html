@@ -1,36 +1,167 @@
-// ===========================
-// Receivers
-// ===========================
-const receiver1 = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({color: 0x0000ff}));
-receiver1.position.set(5,1,20);
-scene.add(receiver1);
 
-const receiver2 = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({color: 0x0000ff}));
-receiver2.position.set(-5,1,20);
-scene.add(receiver2);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Football Phase 3 Prototype</title>
+<style>
+  body { margin: 0; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
 
-const receiver3 = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({color: 0x0000ff}));
-receiver3.position.set(0,1,22);
-scene.add(receiver3);
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.0/dist/gsap.min.js"></script>
+
+<script>
+// ===========================
+// Scene Setup
+// ===========================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb); // morning sky
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200);
+camera.position.set(0, 10, -20);
+camera.lookAt(0,0,40);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
 // ===========================
-// Receiver Routes
+// Lighting
 // ===========================
-const receivers = [
-    {mesh: receiver1, route:[new THREE.Vector3(5,1,20), new THREE.Vector3(10,1,40), new THREE.Vector3(15,1,50)], index:0},
-    {mesh: receiver2, route:[new THREE.Vector3(-5,1,20), new THREE.Vector3(-10,1,40), new THREE.Vector3(-15,1,50)], index:0},
-    {mesh: receiver3, route:[new THREE.Vector3(0,1,22), new THREE.Vector3(0,1,45), new THREE.Vector3(0,1,60)], index:0}
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff,0.6);
+dirLight.position.set(0,20,-10);
+scene.add(dirLight);
+
+// ===========================
+// Field
+// ===========================
+const field = new THREE.Mesh(
+  new THREE.PlaneGeometry(120,60),
+  new THREE.MeshStandardMaterial({color:0x228B22})
+);
+field.rotation.x = -Math.PI/2;
+scene.add(field);
+
+// ===========================
+// QB
+// ===========================
+const QB = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0xff0000}));
+QB.position.set(0,1,0);
+scene.add(QB);
+
+// ===========================
+// Receivers (5 receivers example)
+// ===========================
+const receivers = [];
+const receiverPositions = [
+    {x:5, z:20}, {x:-5, z:20}, {x:0, z:22}, {x:10, z:25}, {x:-10, z:25}
 ];
 
-// Move receivers along their routes
+receiverPositions.forEach((pos,i)=>{
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0x0000ff}));
+    mesh.position.set(pos.x,1,pos.z);
+    mesh.name = "receiver"+(i+1);
+    scene.add(mesh);
+    receivers.push({mesh:mesh, route:[new THREE.Vector3(pos.x,1,pos.z), new THREE.Vector3(pos.x*1.5,1,pos.z+30), new THREE.Vector3(pos.x*2,1,pos.z+50)], index:0});
+});
+
+// ===========================
+// Linemen & RB (placeholders)
+// ===========================
+const linemen = [];
+for(let i=-2;i<=2;i++){
+    const lineman = new THREE.Mesh(new THREE.BoxGeometry(1.5,2,1), new THREE.MeshStandardMaterial({color:0xffaaaa}));
+    lineman.position.set(i*2,1,5);
+    scene.add(lineman);
+    linemen.push(lineman);
+}
+const RB = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0xffaa00}));
+RB.position.set(1.5,1,10);
+scene.add(RB);
+
+// ===========================
+// Mouse Aiming
+// ===========================
+let mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+window.addEventListener('mousemove', (event)=>{
+    mouse.x = (event.clientX/window.innerWidth)*2 -1;
+    mouse.y = -(event.clientY/window.innerHeight)*2 +1;
+});
+
+// ===========================
+// Football
+// ===========================
+let football = null;
+function throwFootball(){
+    if(football) return;
+    football = new THREE.Mesh(new THREE.SphereGeometry(0.35,16,16), new THREE.MeshStandardMaterial({color:0x8B4513}));
+    football.position.copy(QB.position);
+    football.position.y = 2;
+    scene.add(football);
+
+    raycaster.setFromCamera(mouse,camera);
+    const aimPoint = raycaster.ray.at(30,new THREE.Vector3());
+    const distance = aimPoint.clone().sub(QB.position);
+
+    gsap.to(football.position,{
+        duration:2,
+        x:aimPoint.x,
+        y:2 + distance.length()*0.05,
+        z:aimPoint.z,
+        onUpdate:()=>checkCatch(),
+        onComplete:()=>{scene.remove(football); football=null;}
+    });
+}
+
+window.addEventListener('keydown', e=>{if(e.key.toLowerCase()==='e') throwFootball();});
+window.addEventListener('mousedown', throwFootball);
+
+// ===========================
+// Receiver Movement
+// ===========================
 function moveReceivers(){
-    receivers.forEach(r => {
+    receivers.forEach(r=>{
         const target = r.route[r.index];
         const dir = target.clone().sub(r.mesh.position);
         if(dir.length()>0.1){
             r.mesh.position.add(dir.normalize().multiplyScalar(0.2));
         } else {
-            r.index = (r.index + 1) % r.route.length;
+            r.index = (r.index+1)%r.route.length;
         }
     });
 }
+
+// ===========================
+// Catch Logic
+// ===========================
+function checkCatch(){
+    if(!football) return;
+    receivers.forEach(r=>{
+        if(football.position.distanceTo(r.mesh.position)<1.0){
+            console.log("Caught by", r.mesh.name);
+            gsap.killTweensOf(football);
+            scene.remove(football);
+            football=null;
+        }
+    });
+}
+
+// ===========================
+// Animation Loop
+// ===========================
+function animate(){
+    requestAnimationFrame(animate);
+    moveReceivers();
+    renderer.render(scene,camera);
+}
+animate();
+
+</script>
+</body>
+</html>
