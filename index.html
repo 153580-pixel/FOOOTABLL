@@ -1,16 +1,27 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Football Phase 3 Prototype</title>
 <style>
-  body { margin: 0; overflow: hidden; }
-  canvas { display: block; }
+  body { margin:0; overflow:hidden; font-family:sans-serif; }
+  canvas { display:block; }
+  #playbook {
+    position:absolute; top:10px; left:10px; background:rgba(255,255,255,0.8); padding:10px; border-radius:5px;
+  }
+  button { margin:5px; padding:5px 10px; }
 </style>
 </head>
 <body>
 
+<div id="playbook">
+  <h3>Playbook</h3>
+  <button onclick="selectPlay(0)">Quick Slant</button>
+  <button onclick="selectPlay(1)">Post</button>
+  <button onclick="selectPlay(2)">Curl</button>
+</div>
+
+<!-- Three.js and GSAP libraries -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.0/dist/gsap.min.js"></script>
 
@@ -22,24 +33,20 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb); // morning sky
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200);
-camera.position.set(0, 10, -20);
+camera.position.set(0, 12, -25);
 camera.lookAt(0,0,40);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// ===========================
 // Lighting
-// ===========================
 scene.add(new THREE.AmbientLight(0xffffff,0.6));
 const dirLight = new THREE.DirectionalLight(0xffffff,0.6);
 dirLight.position.set(0,20,-10);
 scene.add(dirLight);
 
-// ===========================
 // Field
-// ===========================
 const field = new THREE.Mesh(
   new THREE.PlaneGeometry(120,60),
   new THREE.MeshStandardMaterial({color:0x228B22})
@@ -48,120 +55,160 @@ field.rotation.x = -Math.PI/2;
 scene.add(field);
 
 // ===========================
-// QB
+// Players
 // ===========================
-const QB = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0xff0000}));
+// QB
+const QB = new THREE.Mesh(
+  new THREE.BoxGeometry(1,2,1),
+  new THREE.MeshStandardMaterial({color:0xff0000})
+);
 QB.position.set(0,1,0);
 scene.add(QB);
 
-// ===========================
-// Receivers (5 receivers example)
-// ===========================
-const receivers = [];
-const receiverPositions = [
-    {x:5, z:20}, {x:-5, z:20}, {x:0, z:22}, {x:10, z:25}, {x:-10, z:25}
+// Receivers
+const receivers=[];
+const receiverPositions=[
+  {x:5,z:20},{x:-5,z:20},{x:0,z:22},{x:10,z:25},{x:-10,z:25}
 ];
-
 receiverPositions.forEach((pos,i)=>{
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0x0000ff}));
-    mesh.position.set(pos.x,1,pos.z);
-    mesh.name = "receiver"+(i+1);
-    scene.add(mesh);
-    receivers.push({mesh:mesh, route:[new THREE.Vector3(pos.x,1,pos.z), new THREE.Vector3(pos.x*1.5,1,pos.z+30), new THREE.Vector3(pos.x*2,1,pos.z+50)], index:0});
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1,2,1),
+    new THREE.MeshStandardMaterial({color:0x0000ff})
+  );
+  mesh.position.set(pos.x,1,pos.z);
+  mesh.name = "receiver"+(i+1);
+  scene.add(mesh);
+  receivers.push({mesh:mesh, route:[pos], index:0});
 });
 
-// ===========================
-// Linemen & RB (placeholders)
-// ===========================
-const linemen = [];
+// Linemen
 for(let i=-2;i<=2;i++){
-    const lineman = new THREE.Mesh(new THREE.BoxGeometry(1.5,2,1), new THREE.MeshStandardMaterial({color:0xffaaaa}));
-    lineman.position.set(i*2,1,5);
-    scene.add(lineman);
-    linemen.push(lineman);
+  const lineman = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5,2,1),
+    new THREE.MeshStandardMaterial({color:0xffaaaa})
+  );
+  lineman.position.set(i*2,1,5);
+  scene.add(lineman);
 }
-const RB = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0xffaa00}));
+
+// RB
+const RB = new THREE.Mesh(
+  new THREE.BoxGeometry(1,2,1),
+  new THREE.MeshStandardMaterial({color:0xffaa00})
+);
 RB.position.set(1.5,1,10);
 scene.add(RB);
 
 // ===========================
-// Mouse Aiming
+// Mouse Aiming + Throw
 // ===========================
 let mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
-window.addEventListener('mousemove', (event)=>{
-    mouse.x = (event.clientX/window.innerWidth)*2 -1;
-    mouse.y = -(event.clientY/window.innerHeight)*2 +1;
+
+window.addEventListener('mousemove', e=>{
+  mouse.x = (e.clientX/window.innerWidth)*2-1;
+  mouse.y = -(e.clientY/window.innerHeight)*2+1;
 });
 
-// ===========================
-// Football
-// ===========================
 let football = null;
+const throwSpeed = 1.0;
+
 function throwFootball(){
-    if(football) return;
-    football = new THREE.Mesh(new THREE.SphereGeometry(0.35,16,16), new THREE.MeshStandardMaterial({color:0x8B4513}));
-    football.position.copy(QB.position);
-    football.position.y = 2;
-    scene.add(football);
+  if(football) return;
+  football = new THREE.Mesh(
+    new THREE.SphereGeometry(0.35,16,16),
+    new THREE.MeshStandardMaterial({color:0x8B4513})
+  );
+  football.position.copy(QB.position);
+  football.position.y = 2.5;
+  scene.add(football);
 
-    raycaster.setFromCamera(mouse,camera);
-    const aimPoint = raycaster.ray.at(30,new THREE.Vector3());
-    const distance = aimPoint.clone().sub(QB.position);
-
-    gsap.to(football.position,{
-        duration:2,
-        x:aimPoint.x,
-        y:2 + distance.length()*0.05,
-        z:aimPoint.z,
-        onUpdate:()=>checkCatch(),
-        onComplete:()=>{scene.remove(football); football=null;}
-    });
+  raycaster.setFromCamera(mouse,camera);
+  const aimPoint = raycaster.ray.at(30,new THREE.Vector3());
+  const distance = aimPoint.clone().sub(QB.position);
+  gsap.to(football.position,{
+    duration:2,
+    x:aimPoint.x,
+    y:2 + distance.length()*0.05,
+    z:aimPoint.z,
+    onUpdate:()=>checkCatch(),
+    onComplete:()=>{scene.remove(football); football=null;}
+  });
 }
 
 window.addEventListener('keydown', e=>{if(e.key.toLowerCase()==='e') throwFootball();});
 window.addEventListener('mousedown', throwFootball);
 
 // ===========================
-// Receiver Movement
+// Playbook
+// ===========================
+const plays=[
+  [ // Quick Slant
+    [new THREE.Vector3(5,1,20), new THREE.Vector3(10,1,40)],
+    [new THREE.Vector3(-5,1,20), new THREE.Vector3(-10,1,40)],
+    [new THREE.Vector3(0,1,22), new THREE.Vector3(0,1,40)],
+    [new THREE.Vector3(10,1,25), new THREE.Vector3(15,1,45)],
+    [new THREE.Vector3(-10,1,25), new THREE.Vector3(-15,1,45)]
+  ],
+  [ // Post
+    [new THREE.Vector3(5,1,20), new THREE.Vector3(10,1,50)],
+    [new THREE.Vector3(-5,1,20), new THREE.Vector3(-10,1,50)],
+    [new THREE.Vector3(0,1,22), new THREE.Vector3(0,1,50)],
+    [new THREE.Vector3(10,1,25), new THREE.Vector3(20,1,50)],
+    [new THREE.Vector3(-10,1,25), new THREE.Vector3(-20,1,50)]
+  ],
+  [ // Curl
+    [new THREE.Vector3(5,1,20), new THREE.Vector3(5,1,35)],
+    [new THREE.Vector3(-5,1,20), new THREE.Vector3(-5,1,35)],
+    [new THREE.Vector3(0,1,22), new THREE.Vector3(0,1,37)],
+    [new THREE.Vector3(10,1,25), new THREE.Vector3(10,1,40)],
+    [new THREE.Vector3(-10,1,25), new THREE.Vector3(-10,1,40)]
+  ]
+];
+
+function selectPlay(index){
+  receivers.forEach((r,i)=>{
+    r.route = plays[index][i];
+    r.index = 0;
+  });
+  console.log("Play selected:", index);
+}
+
+// ===========================
+// Receiver Movement & Catch
 // ===========================
 function moveReceivers(){
-    receivers.forEach(r=>{
-        const target = r.route[r.index];
-        const dir = target.clone().sub(r.mesh.position);
-        if(dir.length()>0.1){
-            r.mesh.position.add(dir.normalize().multiplyScalar(0.2));
-        } else {
-            r.index = (r.index+1)%r.route.length;
-        }
-    });
+  receivers.forEach(r=>{
+    if(!r.route) return;
+    const target = r.route[r.index];
+    const dir = target.clone().sub(r.mesh.position);
+    if(dir.length()>0.1) r.mesh.position.add(dir.normalize().multiplyScalar(0.2));
+    else r.index = (r.index+1)%r.route.length;
+  });
 }
 
-// ===========================
-// Catch Logic
-// ===========================
 function checkCatch(){
-    if(!football) return;
-    receivers.forEach(r=>{
-        if(football.position.distanceTo(r.mesh.position)<1.0){
-            console.log("Caught by", r.mesh.name);
-            gsap.killTweensOf(football);
-            scene.remove(football);
-            football=null;
-        }
-    });
+  if(!football) return;
+  receivers.forEach(r=>{
+    if(football.position.distanceTo(r.mesh.position)<1.0){
+      console.log("Caught by", r.mesh.name);
+      gsap.killTweensOf(football);
+      scene.remove(football);
+      football=null;
+    }
+  });
 }
 
 // ===========================
-// Animation Loop
+// Animate Loop
 // ===========================
 function animate(){
-    requestAnimationFrame(animate);
-    moveReceivers();
-    renderer.render(scene,camera);
+  requestAnimationFrame(animate);
+  moveReceivers();
+  renderer.render(scene,camera);
 }
 animate();
-
 </script>
+
 </body>
 </html>
