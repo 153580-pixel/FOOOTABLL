@@ -2,19 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>3D Football Prototype</title>
+<title>3D Football Prototype – Phase 1</title>
 <style>
-  body { margin: 0; overflow: hidden; background: #000; }
+  body { margin: 0; overflow: hidden; }
   #ui {
     position: absolute;
     top: 10px;
     left: 10px;
     color: white;
     font-family: Arial, sans-serif;
+    background: rgba(0,0,0,0.4);
+    padding: 8px;
+    border-radius: 6px;
   }
 </style>
 </head>
 <body>
+
 <div id="ui">
   <div>WASD: Move</div>
   <div>SPACE: Throw</div>
@@ -23,99 +27,120 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
 
 <script>
+/* SCENE */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a5c2e);
+scene.background = new THREE.Color(0x87ceeb); // morning sky
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-camera.position.set(0, 10, 15);
+/* CAMERA */
+const camera = new THREE.PerspectiveCamera(
+  65,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+camera.position.set(0, 12, 18);
 
-const renderer = new THREE.WebGLRenderer({antialias:true});
+/* RENDERER */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-// Lights
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(10, 20, 10);
-scene.add(light);
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+/* LIGHTING */
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(20, 40, 20);
+sun.castShadow = true;
+scene.add(sun);
 
-// Field
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+/* FIELD */
 const field = new THREE.Mesh(
-  new THREE.PlaneGeometry(50, 100),
-  new THREE.MeshStandardMaterial({color: 0x2e8b57})
+  new THREE.PlaneGeometry(53.3, 120),
+  new THREE.MeshStandardMaterial({ color: 0x2e8b57 })
 );
 field.rotation.x = -Math.PI / 2;
+field.receiveShadow = true;
 scene.add(field);
 
-// Player (QB)
-const player = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 2, 1),
-  new THREE.MeshStandardMaterial({color: 0x0047ab})
-);
-player.position.y = 1;
-scene.add(player);
-
-// Defender
-const defenders = [];
-for (let i = 0; i < 5; i++) {
-  const d = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 2, 1),
-    new THREE.MeshStandardMaterial({color: 0xaa0000})
+/* FIELD LINES */
+function addLine(z, width = 53.3) {
+  const line = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, 0.4),
+    new THREE.MeshStandardMaterial({ color: 0xffffff })
   );
-  d.position.set((Math.random()-0.5)*20, 1, -20 - i*5);
-  defenders.push(d);
-  scene.add(d);
+  line.rotation.x = -Math.PI / 2;
+  line.position.z = z;
+  line.position.y = 0.01;
+  scene.add(line);
 }
 
-// Ball
-let ball = null;
-let ballVelocity = new THREE.Vector3();
+// Yard lines
+for (let z = -50; z <= 50; z += 10) {
+  addLine(z);
+}
 
+// End zones
+addLine(-58, 53.3);
+addLine(58, 53.3);
+
+/* PLAYER (QB – placeholder body) */
+const player = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.6, 1.4, 4, 8),
+  new THREE.MeshStandardMaterial({ color: 0x0033aa })
+);
+player.position.set(0, 1.4, 40);
+player.castShadow = true;
+scene.add(player);
+
+/* FOOTBALL */
+let football = null;
+let footballVelocity = new THREE.Vector3();
+
+function throwFootball() {
+  if (football) return;
+
+  football = new THREE.Mesh(
+    new THREE.SphereGeometry(0.35, 16, 16),
+    new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+  );
+  football.scale.set(1.5, 1, 1); // football shape
+  football.position.copy(player.position);
+  football.position.y += 0.5;
+  football.castShadow = true;
+
+  footballVelocity.set(0, 0.25, -0.8);
+  scene.add(football);
+}
+
+/* CONTROLS */
 const keys = {};
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-function throwBall() {
-  if (ball) return;
-  ball = new THREE.Mesh(
-    new THREE.SphereGeometry(0.3, 16, 16),
-    new THREE.MeshStandardMaterial({color: 0xffffff})
-  );
-  ball.position.copy(player.position);
-  ballVelocity.set(0, 0.2, -0.6);
-  scene.add(ball);
-}
-
+/* ANIMATION LOOP */
 function animate() {
   requestAnimationFrame(animate);
 
-  // Movement
-  if (keys["w"]) player.position.z -= 0.2;
-  if (keys["s"]) player.position.z += 0.2;
-  if (keys["a"]) player.position.x -= 0.2;
-  if (keys["d"]) player.position.x += 0.2;
+  if (keys["w"]) player.position.z -= 0.3;
+  if (keys["s"]) player.position.z += 0.3;
+  if (keys["a"]) player.position.x -= 0.3;
+  if (keys["d"]) player.position.x += 0.3;
+  if (keys[" "]) throwFootball();
 
-  if (keys[" "]) throwBall();
+  if (football) {
+    football.position.add(footballVelocity);
+    footballVelocity.y -= 0.012;
+    football.rotation.z += 0.3;
 
-  // Ball physics
-  if (ball) {
-    ball.position.add(ballVelocity);
-    ballVelocity.y -= 0.01;
-    if (ball.position.y <= 0) {
-      scene.remove(ball);
-      ball = null;
+    if (football.position.y <= 0) {
+      scene.remove(football);
+      football = null;
     }
   }
 
-  // Defender AI
-  defenders.forEach(d => {
-    const dir = new THREE.Vector3().subVectors(player.position, d.position).normalize();
-    d.position.add(dir.multiplyScalar(0.05));
-  });
-
-  // Camera follow
   camera.position.x = player.position.x;
-  camera.position.z = player.position.z + 15;
+  camera.position.z = player.position.z + 18;
   camera.lookAt(player.position);
 
   renderer.render(scene, camera);
@@ -125,3 +150,4 @@ animate();
 </script>
 </body>
 </html>
+
