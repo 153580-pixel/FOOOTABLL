@@ -1,3 +1,77 @@
-const logoTexture = new THREE.TextureLoader().load('KANAS_CITY_CHEIFS.png');
-helmetMaterial.map = logoTexture;
-helmetMaterial.needsUpdate = true;
+// ===========================
+// QB Mouse Aiming
+// ===========================
+let mouse = new THREE.Vector2();
+let raycaster = new THREE.Raycaster();
+
+// Track mouse movement
+window.addEventListener('mousemove', (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
+// ===========================
+// Throw the Ball
+// ===========================
+let football = null;
+const throwSpeed = 1.0;
+
+function throwFootball() {
+    if (football) return; // Only one ball at a time
+
+    football = new THREE.Mesh(
+        new THREE.SphereGeometry(0.35, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+    );
+    football.scale.set(1.5, 1, 1);
+    football.position.copy(QB.position);
+    football.position.y = 2.5;
+    scene.add(football);
+
+    // Calculate aim direction
+    raycaster.setFromCamera(mouse, camera);
+    const aimPoint = raycaster.ray.at(20, new THREE.Vector3()); // 20 units forward
+    const direction = aimPoint.clone().sub(QB.position).normalize();
+
+    football.velocity = direction.multiplyScalar(throwSpeed);
+}
+
+// Key or mouse click to throw
+window.addEventListener('keydown', (e) => { if(e.key.toLowerCase() === 'e') throwFootball(); });
+window.addEventListener('mousedown', throwFootball);
+
+// ===========================
+// Receiver Route Movement
+// ===========================
+const receivers = [
+    { mesh: receiver1, route: [new THREE.Vector3(5,0,30), new THREE.Vector3(15,0,50)], index:0 },
+    { mesh: receiver2, route: [new THREE.Vector3(-5,0,30), new THREE.Vector3(-15,0,50)], index:0 }
+];
+
+function moveReceivers() {
+    receivers.forEach(r => {
+        const target = r.route[r.index];
+        const dir = target.clone().sub(r.mesh.position);
+        if(dir.length() > 0.1){
+            r.mesh.position.add(dir.normalize().multiplyScalar(0.2)); // speed
+        } else {
+            r.index = (r.index + 1) % r.route.length; // loop route
+        }
+    });
+}
+
+// ===========================
+// Catch Logic
+// ===========================
+function checkCatch() {
+    if(!football) return;
+
+    receivers.forEach(r => {
+        if(football.position.distanceTo(r.mesh.position) < 1.0){
+            // Catch triggered
+            console.log("Ball caught by", r.mesh.name);
+            scene.remove(football);
+            football = null;
+        }
+    }
+
