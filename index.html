@@ -1,12 +1,5 @@
-const loader = new THREE.GLTFLoader();
-loader.load('models/player.glb', function(gltf){
-    const player = gltf.scene;
-    player.scale.set(1.2,1.2,1.2);
-    player.position.set(x, y, z);
-    scene.add(player);
-
-    // Animation
-    const mixer = new THREE.AnimationMixer(player);
-    const action = mixer.clipAction(gltf.animations[0]);
-    action.play();
-});
+CharacterBody3D
+ ├── Skeleton3D
+ │    └── MeshInstance3D (Human Mesh)
+ ├── CollisionShape3D
+ └── Camera3D
